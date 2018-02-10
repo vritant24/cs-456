@@ -1,8 +1,8 @@
 -- CS 456 Homework 2
 -- Due date: 02/16/2018 by 9:00PM
 
--- Name: YOUR NAME HERE
--- Email: YOUR EMAIL HERE
+-- Name: Vritant Bhardwaj
+-- Email: bhardwav@purdue.edu
 
 -- ASSIGNMENT INSTRUCTIONS:
 -- ========================================================================
@@ -84,7 +84,7 @@ data DSTType =
 -- Questions 1-9: Define the type signatures for the nine pieces of
 -- syntax for OurTime. Defining a type alias, OurTimeType, for the
 -- general type of OurTime expressions may make for prettier signatures:
--- month ::
+-- month :: String -> 
 -- namedMonth ::
 -- day ::
 -- namedDay ::
@@ -98,7 +98,7 @@ data DSTType =
 
 -- Questions 10-18: Give the semantics of OurTime expressions by
 -- writing bodies for the function signatures you defined above.
--- month =
+-- month s = Nothing
 -- namedMonth =
 -- day =
 -- namedDay =
@@ -158,6 +158,24 @@ data Pattern =
 
 -- So, the pretty-printed version of ConstructorP "Plus" (TupleP [ConstructorP "Minus" (TupleP [WildCardP, VariableP "X"]), ConstructorP "Plus" (TupleP [ConstP 1, VariableP "Y"])])
 -- would be: "Plus (Minus (* , x_X ), Plus (c_1 , x_Y ) )"
+
+instance Show Pattern where
+      show (WildCardP)          =  "*"
+      show (UnitP)              = "()"
+      show (VariableP s)        = "x_" ++ s
+      show (ConstP d)           = "c_" ++ (show d)
+      show (TupleP ps)          = "(" ++ 
+                                    (foldl 
+                                          (\acc (p, i) -> 
+                                                if (i == (length ps))
+                                                then acc ++ (show p) ++ " "
+                                                else acc ++ (show p) ++ ", "
+                                          ) "" (
+                                                zip ps [1..((length ps))]
+                                          )
+                                    ) 
+                                  ++ ")"
+      show (ConstructorP s p)   = s ++ " " ++ (show p)
 
 -- In the typeclasses lecture (1/23), we defined the YesNo typeclass
 -- whose instances showed how to transform a value of a type into a
