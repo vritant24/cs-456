@@ -1,3 +1,4 @@
+
 -- CS 456 Homework 2
 -- Due date: 02/16/2018 by 9:00PM
 
@@ -23,6 +24,7 @@
 -- These pragma is needed for part 2
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
+import Data.Char
 
 -- Part 1: Shallowly Embedded DSLs
 
@@ -38,11 +40,13 @@
 
 data Month = January | February | March | April | May | June
            | July | August | September | October | November | December
+           deriving (Show)
 
 data DSTType =
      DayV Integer
    | MonthV Month
    | Year Integer
+   deriving (Show)
 
 -- As an example, suppose we have an OurTime program, mdy,
 -- representing the format MM/DD/YYYY. Here are some example output values:
@@ -84,29 +88,131 @@ data DSTType =
 -- Questions 1-9: Define the type signatures for the nine pieces of
 -- syntax for OurTime. Defining a type alias, OurTimeType, for the
 -- general type of OurTime expressions may make for prettier signatures:
--- month :: String -> 
--- namedMonth ::
--- day ::
--- namedDay ::
--- year ::
--- constant x ::
--- fseqm fmt1 fmt2 ::
--- try fmt1 fmt2 ::
--- end ::
+month :: String -> Maybe([DSTType], String)
+namedMonth :: String -> Maybe([DSTType], String)
+monthFromNum :: String -> DSTType
+day :: String -> Maybe([DSTType], String)
+dayAsInt :: String -> DSTType
+namedDay :: String -> Maybe([DSTType], String)
+year :: String -> Maybe([DSTType], String)
+namedYear :: String -> DSTType
+constant :: String -> String -> Maybe([DSTType], String)
+fseqm :: (String -> Maybe([DSTType], String)) -> (String -> Maybe([DSTType], String)) -> (String -> Maybe([DSTType], String))
+try :: (String -> Maybe([DSTType], String)) -> (String -> Maybe([DSTType], String)) -> (String -> Maybe([DSTType], String))
+end :: String -> Maybe([DSTType], String)
 
 -- Step Three: Define the semantics of the language.
 
 -- Questions 10-18: Give the semantics of OurTime expressions by
 -- writing bodies for the function signatures you defined above.
--- month s = Nothing
--- namedMonth =
--- day =
--- namedDay =
--- year =
--- constant x =
--- fseqm fmt1 fmt2 =
--- try fmt1 fmt2 =
--- end =
+catch :: Maybe a -> (a -> Maybe b) -> Maybe b -> Maybe b
+catch Nothing _ err = err
+catch (Just x) f _ = f x
+
+getNextWord :: String -> String -> (String, String)
+getNextWord w [] = (w, "")
+getNextWord w (l:s) = if(isAlpha l) 
+                        then getNextWord (w ++ [l]) s
+                        else (w, ([l]++s))
+
+month [] = Nothing
+month s =   if(isDigit first) 
+            then (
+                  if (isDigit second) 
+                  then Just ([monthFromNum digits], tail (tail s))
+                  else Just ([monthFromNum digits], tail s)
+            )     
+            else Nothing
+            where first = (head s)
+                  second = (head (tail s))
+                  digits = [first] ++ [second]
+
+monthFromNum s = case s of
+                  "01" -> MonthV January
+                  "02" -> MonthV February
+                  "03" -> MonthV March
+                  "04" -> MonthV April
+                  "05" -> MonthV May
+                  "06" -> MonthV June
+                  "07" -> MonthV July
+                  "08" -> MonthV August
+                  "09" -> MonthV September
+                  "10" -> MonthV October
+                  "11" -> MonthV November
+                  "12" -> MonthV December
+                  _    -> MonthV January
+
+namedMonth st = case (word) of 
+                  "January" -> Just([(MonthV January)], s)
+                  "February" -> Just ([(MonthV February)], s)
+                  "March" -> Just ([(MonthV March)], s)
+                  "April" -> Just ([(MonthV April)], s)
+                  "May" -> Just ([(MonthV May)], s)
+                  "June" -> Just ([(MonthV June)], s)
+                  "July" -> Just ([(MonthV July)], s)
+                  "August" -> Just ([(MonthV August)], s)
+                  "September" -> Just ([(MonthV September)], s)
+                  "October" -> Just ([(MonthV October)], s)
+                  "November" -> Just ([(MonthV November)], s)
+                  "December" -> Just ([(MonthV December)], s)
+                  _ -> Nothing
+                  where m@(word, s) = getNextWord "" st
+
+day s =     if (isDigit first) 
+            then (
+                  if (isDigit second) 
+                  then Just ([d], tail (tail s))
+                  else Just ([d], tail s)
+            )     
+            else Nothing
+            where first = (head s)
+                  second = (head (tail s))
+                  digits = [first] ++ [second]
+                  d = dayAsInt digits
+
+dayAsInt s = DayV (read s :: Integer)
+
+namedDay st = case (word) of 
+                  "Monday" -> Just([], s)
+                  "Tuesday" -> Just([], s)
+                  "Wednesday" -> Just([], s)
+                  "Thursday" -> Just([], s)
+                  "Friday" -> Just([], s)
+                  "Saturday" -> Just([], s)
+                  "Sunday" -> Just([], s)
+                  _ -> Nothing
+                  where m@(word, s) = getNextWord "" st
+
+year "" = Nothing
+year s =    if (((length s) >= 4) && (isDigit first) && (isDigit second)  && (isDigit third) && (isDigit fourth))
+            then Just ([namedYear digits], (tail (tail (tail (tail s)))))
+            else Nothing
+            where first = (head s)
+                  second = (head (tail s))
+                  third = (head (tail (tail s)))
+                  fourth = (head (tail (tail (tail s))))
+                  digits = [first] ++ [second] ++ [third] ++ [fourth]
+
+namedYear s = Year (read s :: Integer)
+
+constant _ "" = Nothing
+constant c s =   if(c == [(head s)]) 
+                  then Just ([], tail s)
+                  else Nothing
+
+fseqm fmt1 fmt2 = (\s -> 
+                        catch (fmt1 s) (\(arr1, s1) -> 
+                              catch (fmt2 s1) (\(arr2, s2) -> 
+                                    Just ((arr1 ++ arr2), s2)
+                              ) Nothing
+                        ) Nothing
+                  )
+                  
+try fmt1 fmt2 =   (\s -> 
+                        catch (fmt1 s) (\x -> Just x) (fmt2 s)
+                  )
+
+end s = if (s == "") then Just ([], s) else Nothing
 
 -- Equipped with these functions, you can now write and evaluate
 -- OurTime expressions a la ex1 and ex2. Hooray! Using your definition
@@ -116,19 +222,33 @@ data DSTType =
 
 -- Question 19
 -- Japanese-style dates: #YYYY-MM-DD#
--- japaneseDate
+japaneseDate :: String -> Maybe([DSTType], String)
+japaneseDate = year `fseqm` (constant "-") `fseqm` month `fseqm` (constant "-") `fseqm` day
 
 -- Question 20
 -- Long, American-stye dates: #NamedDay, NamedMonth DD, YYYY#
 -- Example: longDate "Monday, June 15, 2009" ≅ Just ([MonthV June, DayV 15, YearV 2009], "")
--- longDates
+longDates :: String -> Maybe([DSTType], String)
+longDates = namedDay `fseqm` (constant ",") `fseqm` (constant " ") `fseqm` namedMonth `fseqm` (constant " ") `fseqm` day `fseqm` (constant ",") `fseqm` (constant " ") `fseqm` year
+
 
 -- Question 21
 -- Variant dates: #MM-DD-YYYY (en-US) # | #DD-MM-YYYY (fr-FR) # | #YYYY-DD-MM (ja-JP) #
 -- Example variantDate "12-25-2018 (en-US)" ≅ Just ([MonthV December, DayV 25, YearV 2018], "")
 -- Example variantDate "12-25-2018 (fr-FR)" ≅ None
 -- Example variantDate "12-25-2018 (ja-JP)" ≅ None
--- variantDates
+
+getLang :: String -> String -> (String, String)
+getLang w [] = (w, "")
+getLang w (l:s) = if (l == ' ') then (w, s) else getLang (w ++ [l]) s
+
+variantDate :: String -> Maybe([DSTType], String)
+variantDate s =  case lang of 
+                  "(en-US)" -> (month `fseqm` (constant "-") `fseqm` day `fseqm` (constant "-") `fseqm` year) prefix
+                  "(fr-FR)" -> (day `fseqm` (constant "-") `fseqm` month `fseqm` (constant "-") `fseqm` year) prefix
+                  "(ja-JP)" -> (year `fseqm` (constant "-") `fseqm` day `fseqm` (constant "-") `fseqm` month) prefix
+                  _ -> Nothing
+                  where st@(prefix, lang) = getLang "" s
 
 -- Question 22
 -- A sequence of variant dates: #[VariantDates]+ # (Here, the end marker is important!)
@@ -210,14 +330,36 @@ class Conversion a b where
 -- and FancyRunRecords, and use it to define a fancyPace function as
 -- above (you'll need to copy your pace function over).
 
+instance Conversion FancyRunRecord RunRecord where
+      (~!) (FancyRunRecord l s t d) = (l, s, t)
+
+instance Conversion RunRecord RunRecord where
+      (~!) r = r
+
+pace :: RunRecord -> Float
+pace (_, dist, time) = dist / time
+
+fancyPace :: FancyRunRecord -> Float
+fancyPace fr = pace ((~!) fr)
+
 -- Question 26: Define an instance showing how to lift an instance of
 -- YesNo a to an instance of Coercion a Bool.
 
+-- instance Conversion (YesNo a) (Conversion a Bool) where
+--       (~!) a = (Coercion a True)
+
 -- Question 27: Do the same for Num a.
+
+-- instance Conversion (YesNo a) (Num a) where
+--       (~!) a = (Num a)
 
 -- Question 28: Use a similar approach to define generic
 -- conversions between the polymorphic types Maybe a and Maybe b,
 -- given a conversion from a to b.
+
+-- instance Conversion (Maybe a) (Maybe b) where
+--       (~!) (Nothing) = (Nothing)
+      -- (~!) (Just a) = Just ((~!) a)
 
 -- Question 29: Do the same for lists.
 
@@ -257,6 +399,13 @@ class Conversion a b where
 
 -- Question 34:
 -- Theorem: ∀ f l1 l2. map f (l1 ++ l2) ≅ map f l1 ++ map f l2
+-- Case l1 = []
+--   map f (l1 ++ [])                           (left-hand side of equation)
+-- = map f (l1)                                 (evaluation)
+-- = map f (l1) + []                            (By Definition)
+-- = map f (l1) ++ map f []                     (By Definition)
+-- = map f (l1) ++ map f (l2)                     (By Symmetry)
+-- Qed.
 
 -- Question 35-37: Given the following definitions,
 incList1 :: [Int] -> [Int]
