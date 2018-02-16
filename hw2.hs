@@ -256,6 +256,30 @@ variantDate s =  case lang of
 -- variantDates "12-25-2018 (en-US), 25-11-2017 (fr-FR), 1918-4-11 (ja-JP)" ≅
 -- Just ([MonthV December, DayV 25, YearV 2018, MonthV November, DayV 25, YearV 2017, YearV 1918, MonthV April, DayV 11], "")
 
+-- variantDates :: [String] -> Maybe ([DSTType], String)
+-- variantDates s = variantDatesHelper s (Just []);
+-- variantDates (d:s) = catch (variantDate d) (\x -> ++ )
+
+-- tokenize :: String -> [String]
+-- tokenize [] = []
+-- tokenize s = 
+
+-- splitSpace :: String -> (String, String)
+-- splitSpace l:s =  if (l == " ")
+--                   then ("", s)
+--                   else (l ++ left)
+--                   where (left, right) = splitSpace s
+
+-- variantDatesHelper :: [String] -> Maybe [DSTType] -> Maybe ([DSTType], String)
+-- variantDatesHelper [] (Just r) = Just (r, "")
+-- variantDatesHelper (d:s) (Just r) = catch 
+--                                     (variantDate d) 
+--                                     (\(arr, str) -> 
+--                                           variantDatesHelper s (Just (r ++ arr))
+--                                     ) 
+--                                     Nothing
+
+
 -- *I found out OurTime is the name of an over-50s dating site after
 -- creating this homework; there is no clever relationship between
 -- this EDSL and that website (unfortunately).
@@ -345,30 +369,40 @@ fancyPace fr = pace ((~!) fr)
 -- Question 26: Define an instance showing how to lift an instance of
 -- YesNo a to an instance of Coercion a Bool.
 
--- instance Conversion (YesNo a) (Conversion a Bool) where
---       (~!) a = (Coercion a True)
+instance YesNo a => Conversion a Bool where
+      (~!) a = yesno a
 
--- Question 27: Do the same for Num a.
+-- Question 27: Do the same to build an instance of Conversion Integer a
+-- from Num a.
 
--- instance Conversion (YesNo a) (Num a) where
---       (~!) a = (Num a)
+instance Num a => Conversion Integer a where
+      (~!) a = fromInteger a
 
 -- Question 28: Use a similar approach to define generic
 -- conversions between the polymorphic types Maybe a and Maybe b,
 -- given a conversion from a to b.
 
--- instance Conversion (Maybe a) (Maybe b) where
---       (~!) (Nothing) = (Nothing)
-      -- (~!) (Just a) = Just ((~!) a)
+instance (Conversion a b) => Conversion (Maybe a) (Maybe b) where
+       (~!) (Nothing) = Nothing
+       (~!) (Just a) = Just ((~!) a)
 
 -- Question 29: Do the same for lists.
+instance (Conversion a b) => Conversion [a] [b] where
+      (~!) [] = []
+      (~!) (x:xs) = ((~!) x) : ((~!) xs)
+
+instance (Conversion a b) => Conversion (Maybe [a]) (Maybe [b]) where
+      (~!) Nothing = Nothing
+      (~!) (Just []) = Just []
+      (~!) (Just (x:xs)) = Just (((~!) x) : ((~!) xs))
 
 -- Question 30: Use the conversion typeclass to write a generic
 -- magicMap operation that automagically converts the elements of a
 -- list before mapping the supplied operator.
 
--- magicMap :: (Conversion a b) => (b -> c) -> [a] -> [c]
--- magicMap f as = ...
+magicMap :: (Conversion a b) => (b -> c) -> [a] -> [c]
+magicMap f [] = []
+magicMap f as = map f $ (~!) as
 
 -- Question 31: The instances of the Functor typeclass define an fmap
 -- operator which shows how to map a function over the values of a
@@ -398,14 +432,21 @@ fancyPace fr = pace ((~!) fr)
 -- Qed.
 
 -- Question 34:
+-- 
 -- Theorem: ∀ f l1 l2. map f (l1 ++ l2) ≅ map f l1 ++ map f l2
--- Case l1 = []
---   map f (l1 ++ [])                           (left-hand side of equation)
--- = map f (l1)                                 (evaluation)
--- = map f (l1) + []                            (By Definition)
--- = map f (l1) ++ map f []                     (By Definition)
--- = map f (l1) ++ map f (l2)                     (By Symmetry)
+
+-- Case l1 = l11:l1s
+-- = map f (l1 ++ l2)                                   (LHS)
+-- = map f ([l11, l12, .., l1n, l21, l22, .., l2m])     (By definition of ++)
+-- = map f (l11 : [l12,..,l1n, l21,..,l2m]])            (By definition of list)
+-- = case l11 : [l12,..,l1n, l21,..,l2m]] of {[]=[]; (x:xs) -> (f x) : map f xs)} (By unfold definition of map)
+-- = (f l11) : map f [l12,..,l1n, l21,..,l2m]]          (By evaluation)
+-- ...
+-- = (f l11) : (f l22) : .. : (f l1n) : map f [l21, .. l2m] (By repeating unfold definition)
+-- = [f l11, f l12, .. flm] ++ map f l2                 (By definition of :)
+-- = map f l1 ++ map f l2                               (By fold definition of map)
 -- Qed.
+
 
 -- Question 35-37: Given the following definitions,
 incList1 :: [Int] -> [Int]
@@ -421,11 +462,36 @@ incList3 (x : xs) = (1 + x) : incList3 xs
 
 -- Question 35:
 -- Theorem:  ∀ l. incList1 l ≅ incList2 l.
+-- Case l = []
+-- = map (\x -> x + 1) []                 (LHS)
+-- = []                                   (by evaluation of map f [])
+-- = True
+
+-- Case l = y:ys
+-- = map (\x > x + 1) (y:ys)              (LHS)
+-- = (y + 1) : (map (\x -> x + 1) ys)     (by definition of map)
+-- = (1 + y) : (map (\x -> x + 1) ys)     (by associativity)
+-- Qed.
 
 -- Question 36:
 -- Theorem:  ∀ l. incList1 l ≅ incList3 l.
+-- Case l = []
+-- = map (\x -> x + 1) []                 (LHS)
+-- = []                                   (by evaluation of map f [])
+-- = True
+
+-- Case l = y1:ys
+-- = (1 + y1) : incList3 ys                  (RHS)
+-- = (1 + y1) : incList3 y2:ys               (By definition of :)
+-- = (1 + y1) : (1 + y2) : incList3 y3:ys    (By evaluation)
+-- = (1 + y1) : (1 + y2) : ... (1 + yn)      (By repeated evaluation)
+-- = [(1 + y1), (1 + y2),.., (1 + yn)]       (By definition of :)
+-- = map (\x -> x + 1) [y1:ys]               (By fold definition of map)
+-- = map (\x -> x + 1) l                     (By inductive hypothesis)
+-- Qed.
 
 -- Question 37: In one sentence, what's the key difference between the proofs for questions 35 and 36?
+-- 
 
 -- Questions 38-39: Given the following definitions,
 
@@ -441,8 +507,16 @@ unzip' ((a, b) : abs) = let (as, bs) = unzip' abs in
 
 -- Question 38: Prove or disprove (by giving an input that's a counterexample)
 -- Theorem?:  ∀ l. zip' (unzip' l) ≅ l.
+-- Will not work as types don't confer. 
+-- zip' takes in type [a] -> [b]
+-- but unzip' returns a tuple ([a], [b])
 
 -- Question 39: Prove or disprove (by giving an input that's a counterexample)
 -- Theorem?:  ∀ l1 l2. unzip' (zip' l1 l2) ≅ (l1, l2).
+--Will not work
+-- Counter example : 
+-- l1 = [1, 2, 3]
+-- l2 = [1, 2]
+-- The theorem won't apply as the result would be ([1, 2], [1, 2]) which is not equal to (l1, l2)
 
 main = print $  "Yo"
