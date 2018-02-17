@@ -90,7 +90,7 @@ data DSTType =
 -- general type of OurTime expressions may make for prettier signatures:
 month :: String -> Maybe([DSTType], String)
 namedMonth :: String -> Maybe([DSTType], String)
-monthFromNum :: String -> DSTType
+monthFromNum :: String -> Maybe(DSTType)
 day :: String -> Maybe([DSTType], String)
 dayAsInt :: String -> DSTType
 namedDay :: String -> Maybe([DSTType], String)
@@ -119,8 +119,8 @@ month [] = Nothing
 month s =   if(isDigit first) 
             then (
                   if (isDigit second) 
-                  then Just ([monthFromNum digits], tail (tail s))
-                  else Just ([monthFromNum digits], tail s)
+                  then catch (monthFromNum digits) (\x -> Just ([x], tail (tail s))) Nothing
+                  else catch (monthFromNum ("0" ++ [first])) (\x -> Just ([x], tail s)) Nothing 
             )     
             else Nothing
             where first = (head s)
@@ -128,19 +128,19 @@ month s =   if(isDigit first)
                   digits = [first] ++ [second]
 
 monthFromNum s = case s of
-                  "01" -> MonthV January
-                  "02" -> MonthV February
-                  "03" -> MonthV March
-                  "04" -> MonthV April
-                  "05" -> MonthV May
-                  "06" -> MonthV June
-                  "07" -> MonthV July
-                  "08" -> MonthV August
-                  "09" -> MonthV September
-                  "10" -> MonthV October
-                  "11" -> MonthV November
-                  "12" -> MonthV December
-                  _    -> MonthV January
+                  "01" -> Just(MonthV January)
+                  "02" -> Just(MonthV February)
+                  "03" -> Just(MonthV March)
+                  "04" -> Just(MonthV April)
+                  "05" -> Just(MonthV May)
+                  "06" -> Just(MonthV June)
+                  "07" -> Just(MonthV July)
+                  "08" -> Just(MonthV August)
+                  "09" -> Just(MonthV September)
+                  "10" -> Just(MonthV October)
+                  "11" -> Just(MonthV November)
+                  "12" -> Just(MonthV December)
+                  _    -> Nothing
 
 namedMonth st = case (word) of 
                   "January" -> Just([(MonthV January)], s)
@@ -161,14 +161,14 @@ namedMonth st = case (word) of
 day s =     if (isDigit first) 
             then (
                   if (isDigit second) 
-                  then Just ([d], tail (tail s))
-                  else Just ([d], tail s)
+                  then Just ([d2], tail (tail s))
+                  else Just ([d1], tail s)
             )     
             else Nothing
             where first = (head s)
                   second = (head (tail s))
-                  digits = [first] ++ [second]
-                  d = dayAsInt digits
+                  d1 = dayAsInt [first]
+                  d2 = dayAsInt ([first] ++ [second])
 
 dayAsInt s = DayV (read s :: Integer)
 
@@ -195,10 +195,15 @@ year s =    if (((length s) >= 4) && (isDigit first) && (isDigit second)  && (is
 
 namedYear s = Year (read s :: Integer)
 
-constant _ "" = Nothing
-constant c s =   if(c == [(head s)]) 
+constantC :: String -> String -> Maybe([DSTType], String)
+constantC _ "" = Nothing
+constantC c s =   if(c == [(head s)]) 
                   then Just ([], tail s)
                   else Nothing
+
+
+constant "" s =  Just ([], s)
+constant (x:xs) s = catch (constantC [x] s) (\(_, s1) -> constant xs s1) Nothing
 
 fseqm fmt1 fmt2 = (\s -> 
                         catch (fmt1 s) (\(arr1, s1) -> 
@@ -238,17 +243,19 @@ longDates = namedDay `fseqm` (constant ",") `fseqm` (constant " ") `fseqm` named
 -- Example variantDate "12-25-2018 (fr-FR)" ≅ None
 -- Example variantDate "12-25-2018 (ja-JP)" ≅ None
 
-getLang :: String -> String -> (String, String)
-getLang w [] = (w, "")
-getLang w (l:s) = if (l == ' ') then (w, s) else getLang (w ++ [l]) s
+
+
+enUS :: String ->  Maybe([DSTType], String)
+enUS = month `fseqm` (constant "-") `fseqm` day `fseqm` (constant "-") `fseqm` year `fseqm` (constant " (en-US)")
+
+frFr :: String ->  Maybe([DSTType], String)
+frFr = day `fseqm` (constant "-") `fseqm` month `fseqm` (constant "-") `fseqm` year `fseqm` (constant" (fr-FR)")
+
+jaJP :: String ->  Maybe([DSTType], String)
+jaJP = year `fseqm` (constant "-") `fseqm` day `fseqm` (constant "-") `fseqm` month `fseqm` (constant" (ja-JP)")
 
 variantDate :: String -> Maybe([DSTType], String)
-variantDate s =  case lang of 
-                  "(en-US)" -> (month `fseqm` (constant "-") `fseqm` day `fseqm` (constant "-") `fseqm` year) prefix
-                  "(fr-FR)" -> (day `fseqm` (constant "-") `fseqm` month `fseqm` (constant "-") `fseqm` year) prefix
-                  "(ja-JP)" -> (year `fseqm` (constant "-") `fseqm` day `fseqm` (constant "-") `fseqm` month) prefix
-                  _ -> Nothing
-                  where st@(prefix, lang) = getLang "" s
+variantDate = try (try enUS frFr) jaJP
 
 -- Question 22
 -- A sequence of variant dates: #[VariantDates]+ # (Here, the end marker is important!)
@@ -256,29 +263,28 @@ variantDate s =  case lang of
 -- variantDates "12-25-2018 (en-US), 25-11-2017 (fr-FR), 1918-4-11 (ja-JP)" ≅
 -- Just ([MonthV December, DayV 25, YearV 2018, MonthV November, DayV 25, YearV 2017, YearV 1918, MonthV April, DayV 11], "")
 
--- variantDates :: [String] -> Maybe ([DSTType], String)
--- variantDates s = variantDatesHelper s (Just []);
--- variantDates (d:s) = catch (variantDate d) (\x -> ++ )
+variantDates :: String -> Maybe ([DSTType], String)
+variantDates =    (\s -> 
+                        catch (variantDate s) 
+                              (\(arr1, s1) -> 
+                                    if(s1 == "")
+                                    then  Just (arr1, s1)
+                                    else
+                                          catch (parseConstant s1) 
+                                                (\(arr2, s2) -> 
+                                                      catch (variantDates s2) 
+                                                      (\(arr3, s3) -> 
+                                                            Just ((arr1 ++ arr3), s3)
+                                                      ) 
+                                                      Nothing
+                                                ) 
+                                                Nothing
+                              ) 
+                              Nothing
+                  )
 
--- tokenize :: String -> [String]
--- tokenize [] = []
--- tokenize s = 
-
--- splitSpace :: String -> (String, String)
--- splitSpace l:s =  if (l == " ")
---                   then ("", s)
---                   else (l ++ left)
---                   where (left, right) = splitSpace s
-
--- variantDatesHelper :: [String] -> Maybe [DSTType] -> Maybe ([DSTType], String)
--- variantDatesHelper [] (Just r) = Just (r, "")
--- variantDatesHelper (d:s) (Just r) = catch 
---                                     (variantDate d) 
---                                     (\(arr, str) -> 
---                                           variantDatesHelper s (Just (r ++ arr))
---                                     ) 
---                                     Nothing
-
+parseConstant :: String -> Maybe ([DSTType], String)
+parseConstant = constant ", "
 
 -- *I found out OurTime is the name of an over-50s dating site after
 -- creating this homework; there is no clever relationship between
@@ -337,8 +343,6 @@ class YesNo a where
 
 type RunRecord = (String, Float, Float)
 data FancyRunRecord = FancyRunRecord { loc :: String, dist :: Float, time :: Float, heartRate :: Float}
--- fancyPace :: FancyRunRecord -> Float
--- fancyPace fr = pace ((~!) fr)
 
 -- The downside is that you need to insert explict "casts", but oh well.
 
@@ -382,19 +386,19 @@ instance Num a => Conversion Integer a where
 -- conversions between the polymorphic types Maybe a and Maybe b,
 -- given a conversion from a to b.
 
-instance (Conversion a b) => Conversion (Maybe a) (Maybe b) where
+instance {-# OVERLAPPING #-} (Conversion a b) => Conversion (Maybe a) (Maybe b) where
        (~!) (Nothing) = Nothing
        (~!) (Just a) = Just ((~!) a)
 
 -- Question 29: Do the same for lists.
-instance (Conversion a b) => Conversion [a] [b] where
+instance {-# OVERLAPPING #-}  (Conversion a b) => Conversion [a] [b] where
       (~!) [] = []
       (~!) (x:xs) = ((~!) x) : ((~!) xs)
 
-instance (Conversion a b) => Conversion (Maybe [a]) (Maybe [b]) where
-      (~!) Nothing = Nothing
-      (~!) (Just []) = Just []
-      (~!) (Just (x:xs)) = Just (((~!) x) : ((~!) xs))
+-- instance (Conversion a b) => Conversion (Maybe [a]) (Maybe [b]) where
+--       (~!) Nothing = Nothing
+--       (~!) (Just []) = Just []
+--       (~!) (Just (x:xs)) = Just (((~!) x) : ((~!) xs))
 
 -- Question 30: Use the conversion typeclass to write a generic
 -- magicMap operation that automagically converts the elements of a
@@ -408,7 +412,9 @@ magicMap f as = map f $ (~!) as
 -- operator which shows how to map a function over the values of a
 -- polymorphic data type. Use this with the the conversion typeclass
 -- to show how to generically convert between container types.
--- instance (Functor f, Conversion a b) => Conversion (f a) (f b) where ...
+
+instance (Functor f, Conversion a b) => Conversion (f a) (f b) where
+      (~!) a = ((~!) a)
 
 -- Part 3: Equational Reasoning:
 -- Prove the following theorems using induction and equational reasoning.
@@ -434,6 +440,12 @@ magicMap f as = map f $ (~!) as
 -- Question 34:
 -- 
 -- Theorem: ∀ f l1 l2. map f (l1 ++ l2) ≅ map f l1 ++ map f l2
+-- Case l1 = []
+-- = map f ([] ++ l2)                                   (LHS)
+-- = map f l2                                           (By Evaluation)
+-- = map f l2 ++ []                                     (By Definition of lists)
+-- = map f l2 ++ map f []                               (By fold definition of map)
+-- = True
 
 -- Case l1 = l11:l1s
 -- = map f (l1 ++ l2)                                   (LHS)
@@ -463,35 +475,38 @@ incList3 (x : xs) = (1 + x) : incList3 xs
 -- Question 35:
 -- Theorem:  ∀ l. incList1 l ≅ incList2 l.
 -- Case l = []
--- = map (\x -> x + 1) []                 (LHS)
--- = []                                   (by evaluation of map f [])
+-- = map (\x -> x + 1) []                             (LHS)
+-- = case [] of {[]=[]; (x:xs) -> (f x) : map f xs)}  (By unfold definition of map)
+-- = []                                               (By evaluation)
 -- = True
 
 -- Case l = y:ys
--- = map (\x > x + 1) (y:ys)              (LHS)
--- = (y + 1) : (map (\x -> x + 1) ys)     (by definition of map)
--- = (1 + y) : (map (\x -> x + 1) ys)     (by associativity)
+-- = map (\x > x + 1) (y:ys)                          (LHS)
+-- = (y + 1) : (map (\x -> x + 1) ys)                 (By definition of map)
+-- = (1 + y) : (map (\x -> x + 1) ys)                 (By associativity)
 -- Qed.
 
 -- Question 36:
 -- Theorem:  ∀ l. incList1 l ≅ incList3 l.
 -- Case l = []
--- = map (\x -> x + 1) []                 (LHS)
--- = []                                   (by evaluation of map f [])
+-- = map (\x -> x + 1) []                              (LHS)
+-- = case [] of {[]=[]; (x:xs) -> (f x) : map f xs)}   (By unfold definition of map)
+-- = []                                                (By evaluation of map f [])
 -- = True
 
 -- Case l = y1:ys
--- = (1 + y1) : incList3 ys                  (RHS)
--- = (1 + y1) : incList3 y2:ys               (By definition of :)
--- = (1 + y1) : (1 + y2) : incList3 y3:ys    (By evaluation)
--- = (1 + y1) : (1 + y2) : ... (1 + yn)      (By repeated evaluation)
--- = [(1 + y1), (1 + y2),.., (1 + yn)]       (By definition of :)
--- = map (\x -> x + 1) [y1:ys]               (By fold definition of map)
--- = map (\x -> x + 1) l                     (By inductive hypothesis)
+-- = (1 + y1) : incList3 ys                           (RHS)
+-- = (1 + y1) : incList3 y2:ys                        (By definition of :)
+-- = (1 + y1) : (1 + y2) : incList3 y3:ys             (By evaluation)
+-- = (1 + y1) : (1 + y2) : ... (1 + yn)               (By repeated evaluation)
+-- = [(1 + y1), (1 + y2),.., (1 + yn)]                (By definition of :)
+-- = map (\x -> x + 1) [y1:ys]                        (By fold definition of map)
+-- = map (\x -> x + 1) l                              (By inductive hypothesis)
 -- Qed.
 
 -- Question 37: In one sentence, what's the key difference between the proofs for questions 35 and 36?
--- 
+-- In question 35, the two functions are almost identical by a step, and can thus be proven by an equational proof, 
+-- but the second proof requires and inductive hypothesis along with an inductive proof.
 
 -- Questions 38-39: Given the following definitions,
 
