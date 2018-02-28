@@ -1,7 +1,3 @@
-q
-quit
-uit
-:quit
 -- CS 456 Homework 1
 -- Due date: 02/02/2018 by 9:00PM
 
@@ -247,11 +243,11 @@ mapPartial f l = foldl  (\acc x ->
 -- that takes an argument and returns a function that takes the second argument. Write
 -- curry and uncurry functions that performs this conversion:
 
-curry :: ((a, b) -> c) -> a -> b -> c
-curry f = \a b -> f (a, b)
+curry_ :: ((a, b) -> c) -> a -> b -> c
+curry_ f = \a b -> f (a, b)
 
-uncurry :: (a -> b -> c) -> (a, b) -> c
-uncurry f = \(a, b) -> f a b
+uncurry_ :: (a -> b -> c) -> (a, b) -> c
+uncurry_ f = \(a, b) -> f a b
 
 -- Part 5
 -- In this portion of the homework, you will implement a simple
@@ -335,6 +331,24 @@ countSomeVar s pat = g 0 (\n -> if (n == s) then length n else 0) pat
 -- second takes a list of strings and decides if it has
 -- repeats. Sample solution is ~15 lines.
 
+checkPat :: Pattern -> Bool
+checkPat p = foldl (\acc s ->
+                        if ((getCount s l) > 1) then False else acc
+                    ) True l
+            where l = getVars p
+
+getVars :: Pattern -> [String]
+getVars (WildCardP) = []
+getVars (VariableP s) = [s]
+getVars (UnitP) = []
+getVars (TupleP ps) = foldl (\acc p -> acc ++ (getVars p)) [] ps
+getVars (ConstructorP _ p) = getVars p
+
+getCount :: String -> [String] -> Int
+getCount _ [] = 0
+getCount s list = foldl (\acc x -> if(x == s) then acc + 1 else acc) 0 list
+
+
 -- Question 22. Write a function match that takes a Value and a
 -- Pattern and returns a Maybe [(String, Value)], returning Nothing if
 -- the pattern does not match and Just lst where lst is the list of
@@ -345,31 +359,24 @@ countSomeVar s pat = g 0 (\n -> if (n == s) then length n else 0) pat
 -- for the rules for what patterns match what values, and what
 -- bindings they produce.
 match :: Value -> Pattern -> Maybe [(String, Value)]
-match v p = case p of   (WildCardP) -> Just []
-                        (VariableP s) -> Just [(s, v)]
-                        (UnitP) -> var
-                        (ConstP m) -> cons m
-                        (ConstructorP s2 p) -> const s2 p
-                        where
-                            var = case v of (UnitV) -> Just []
-                                            _ -> Nothing
-                            cons m = case v of (ConstV n) -> if (n == m) then Just [] else Nothing 
-                             
-                            const s2 p = case v of (ConstructorV s1 v) -> if (s1 == s1) then match v p else Nothing
-                                           
-
--- match _ (WildCardP) = Just []
--- match v (VariableP s) = Just [(s, v)]
--- match (UnitV) (UnitP) = Just []
--- match (ConstV n) (ConstP m) = if (n == m) then Just [] else Nothing
--- match (TupleV vs) (TupleP ps) = if (length ps == length vs) 
---                                 then foldl ( \acc (v, p) ->
---                                     acc ++ (catch (match v p) (\x -> [x]) [])
---                                 ) (Just []) (zip vs ps)
---                                 else Nothing
--- match (ConstructorV s1 v) (ConstructorP s2 p) = if (s1 == s1) then match v p else Nothing
--- match _ _ = Nothing
-
+match v p = case p of   
+                (WildCardP) -> Just []
+                (VariableP s) -> Just [(s, v)]
+                (UnitP) -> var
+                (ConstP m) -> cons m
+                (ConstructorP s2 p) -> const s2 p
+                (TupleP ps) -> tuple ps
+                where
+                    var         = case v of (UnitV) -> Just []
+                    cons m      = case v of (ConstV n) -> if (n == m) then Just [] else Nothing 
+                    const s2 p  = case v of (ConstructorV s1 v) -> if (s1 == s1) then match v p else Nothing
+                    tuple ps    = case v of (TupleV vs) ->  if (length vs == length ps) 
+                                                            then Just(
+                                                                foldl ( \acc (v, p) ->
+                                                                    acc ++ (catch (match v p) (\x -> x) [])
+                                                                ) [] (zip vs ps)
+                                                            )
+                                                            else Nothing
 
 -- Question 23. Write a function firstMatch that takes a value and a
 -- list of patterns and returns a Maybe [(String, Value)], namely
@@ -377,5 +384,18 @@ match v p = case p of   (WildCardP) -> Just []
 -- the list of bindings for the first pattern in the list that
 -- matches. Hint: Your answers from part 4 may be useful here.
 
+firstMatch :: Value -> [Pattern] -> Maybe [(String, Value)]
+firstMatch v list = getFirst (mapPartial (match v) list)
+
+getFirst :: [[(String, Value)]] -> Maybe [(String, Value)]
+getFirst [] = Nothing
+getFirst l = Just (head l)
+
+
+
+div1 :: Int -> Int -> Int
+div1 _ 0 = 0
+div1 n1 n2 = n1*n2
 
 main = print $ pace ("Yo", 2, 3)
+
