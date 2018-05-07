@@ -763,6 +763,9 @@ composeTypeSubst sigma1 sigma2 =
         (Just ty) -> (v, applyTypeSubst sigma1 ty)
   ) ((filterTS sigma1 sigma2) ++ sigma2)
 
+-- composeTypeSubst :: TypeSubst -> TypeSubst -> TypeSubst
+-- composeTypeSubst sigma1 sigma2 = (filterTS sigma1 sigma2) ++ sigma2
+
 composeRes = composeTypeSubst [(1, TyVar 2), (3, TyVar 4)] [(5, TyArrow TBool TBool), (2, TyVar 3)] 
 
 
